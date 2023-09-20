@@ -8,23 +8,30 @@ pragma solidity ^0.8.8;
 
 import "./PriceConverter.sol";
 
+error NotOwner();
+
 contract FundMe {
     using PriceConverter for uint256;
 
-    uint256 public minUSD = 50 * 1e18;
+    uint256 public constant MINIMUM_USD = 50 * 1e18; 
+    // By making the non-changing variables constant, we can reduce the total gas cost for the transaction  
+    // Constant values are assigned at compile time
     address[] public funders;
     mapping(address => uint256) public addressToAmountFunded;
-    address public owner;
+    address public immutable i_owner;
 
     constructor() {
-        owner = msg.sender; // --> owner will be the person who called the constructor, i.e deployer of the contract
+        i_owner = msg.sender; 
+        // owner will be the person who called the constructor, i.e deployer of the contract
+        // Making the variable as immutable means it can only be assigned a value once in runtime
+        // Reduces gas consumption
     }
 
     function fund() public payable {
         // Want to be able to set a minimum fund amount in USD  
         // require (getConversionRate(msg.value) >= minUSD, "Didn't send enough ethereum!!"); //msg.value --> 18 decimal places
         
-        require(msg.value.getConversionRate() >= minUSD, "Didn't send enought Ethereum!!");
+        require(msg.value.getConversionRate() >= MINIMUM_USD, "Didn't send enought Ethereum!!");
         
         funders.push(msg.sender);
         addressToAmountFunded[msg.sender] = msg.value;
@@ -54,8 +61,22 @@ contract FundMe {
     }
 
     modifier onlyOwner {
-        require(msg.sender == owner, "Sender is not owner");
+        // require(msg.sender == i_owner, "Sender is not owner");
+        if (msg.sender != i_owner) {revert NotOwner();} // Using custom errors makes it gas efficient
         _; // --> rest of the code wherever this modifier is used
     }
 
+    // What happens when people send ETH without calling the fund function
+    
+    // receive is a special function that gets called whenever ETH is being sent without data 
+    receive() external payable { 
+        fund();
+    }
+
+    // fallback is a special function that gets called whenever ETH is being sent along with some data
+    fallback() external payable {
+        fund();
+    }
+
+    // But calling the fund function will cost less gas compared to using the recieve or fund functions
 }
